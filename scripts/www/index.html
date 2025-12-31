@@ -1,11 +1,522 @@
 <!DOCTYPE html>
 <html lang="en">
-    <head>
-        <meta charset="UTF-8" />
-        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-        <title>PakePlus</title>
-    </head>
-    <body>
-        PakePlus
-    </body>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Arcane Rune Generator</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            font-family: 'Quicksand', sans-serif;
+            background-color: #020617; /* slate-950 */
+            color: #f8fafc;
+        }
+        .font-mystic {
+            font-family: 'Cinzel', serif;
+        }
+        .font-ancient {
+            font-family: 'Uncial Antiqua', serif;
+        }
+        .magical-glow {
+            box-shadow: 0 0 15px rgba(168, 85, 247, 0.4);
+        }
+        .magical-border {
+            border: 1px solid rgba(234, 179, 8, 0.3);
+        }
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #0f172a;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #475569;
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #64748b;
+        }
+    </style>
+<link rel="stylesheet" href="/index.css">
+</head>
+<body class="min-h-screen">
+    <div id="app-container"></div>
+
+    <script>
+      document.addEventListener('DOMContentLoaded', () => {
+        const appContainer = document.getElementById('app-container');
+
+        // --- START OF INLINED LOGIC ---
+
+        // FROM types.ts
+        const ALPHABET_MAP = {
+          1: ['A', 'J', 'S'], 2: ['B', 'K', 'T'], 3: ['C', 'L', 'U'],
+          4: ['D', 'M', 'V'], 5: ['E', 'N', 'W'], 6: ['F', 'O', 'X'],
+          7: ['G', 'P', 'Y'], 8: ['H', 'Q', 'Z'], 9: ['I', 'R']
+        };
+
+        const getNumberForLetter = (char) => {
+          const upperChar = char.toUpperCase();
+          for (const [num, letters] of Object.entries(ALPHABET_MAP)) {
+            if (letters.includes(upperChar)) return parseInt(num);
+          }
+          return null;
+        };
+        
+        // --- APPLICATION STATE ---
+        let state = {
+            inputText: "",
+            config: {
+                removeDuplicates: true,
+                removeVowels: true,
+            },
+            lines: [],
+            wallpaper: {
+                mode: 'dynamic',
+                elements: [],
+                draggingId: null,
+            }
+        };
+
+        // --- HTML STRUCTURE ---
+        appContainer.innerHTML = `
+            <div class="max-w-7xl mx-auto p-4 md:p-8 space-y-12 pb-32">
+              <header class="text-center space-y-2 mb-12">
+                <h1 class="text-4xl md:text-6xl font-mystic text-amber-500 drop-shadow-[0_0_10px_rgba(234,179,8,0.5)]">
+                  ARCANE RUNE GENERATOR
+                </h1>
+                <p class="text-slate-400 italic tracking-widest text-sm uppercase">
+                  Extract the divine frequency from mundane text
+                </p>
+              </header>
+
+              <div class="grid grid-cols-1 lg:grid-cols-12 gap-8">
+                <div class="lg:col-span-5 space-y-6">
+                  <div class="relative group">
+                    <div class="absolute -inset-1 bg-gradient-to-r from-amber-500 to-purple-600 rounded-lg blur opacity-20 group-hover:opacity-40 transition duration-1000"></div>
+                    <div class="relative bg-slate-900 magical-border rounded-lg overflow-hidden">
+                      <div class="flex items-center justify-between p-3 border-b border-slate-800 bg-slate-900/80">
+                        <span class="flex items-center gap-2 text-amber-500 font-mystic text-sm">
+                          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3-1.9 5.8-5.8 1.9 5.8 1.9L12 21l1.9-5.8 5.8-1.9-5.8-1.9L12 3z"/><path d="M5 3v4"/><path d="M19 17v4"/><path d="M3 5h4"/><path d="M17 19h4"/></svg>
+                          Ritual Inscription
+                        </span>
+                      </div>
+                      <div class="flex min-h-[8rem]">
+                        <div id="line-numbers" class="w-12 bg-slate-950 border-r border-slate-800 flex flex-col items-center pt-4 text-slate-600 font-mono text-xs select-none space-y-[0.1px] leading-6">
+                        </div>
+                        <textarea id="text-input" placeholder="Enter text to manifest..." class="flex-1 bg-transparent p-4 outline-none text-amber-100 font-mono resize-none leading-6 placeholder:text-slate-700 overflow-hidden" style="min-height: 8rem;"></textarea>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <div class="bg-slate-900/50 magical-border p-4 rounded-lg space-y-4 backdrop-blur-sm">
+                    <div class="flex items-center gap-2 text-amber-500 font-mystic mb-2">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 0 2.12l-.15.08a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.38a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1 0-2.12l.15-.08a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>
+                        Alchemy Constraints
+                    </div>
+                    <div class="flex flex-wrap gap-4">
+                      <label class="flex items-center gap-3 cursor-pointer group">
+                        <div id="check-duplicates-box" class="w-5 h-5 rounded border border-amber-500/50 flex items-center justify-center transition"></div>
+                        <input id="check-duplicates" type="checkbox" class="hidden" ${state.config.removeDuplicates ? 'checked' : ''} />
+                        <span class="text-sm text-slate-300 group-hover:text-amber-300 transition">Remove Duplicates</span>
+                      </label>
+                      <label class="flex items-center gap-3 cursor-pointer group">
+                        <div id="check-vowels-box" class="w-5 h-5 rounded border border-amber-500/50 flex items-center justify-center transition"></div>
+                        <input id="check-vowels" type="checkbox" class="hidden" ${state.config.removeVowels ? 'checked' : ''} />
+                        <span class="text-sm text-slate-300 group-hover:text-amber-300 transition">Remove Vowels</span>
+                      </label>
+                    </div>
+                  </div>
+
+                  <div id="processed-results" class="bg-slate-900/50 magical-border p-4 rounded-lg space-y-2 min-h-[100px] backdrop-blur-sm"></div>
+                  <div id="alphabet-table" class="w-full overflow-x-auto magical-border bg-slate-900/50 rounded-lg p-4 backdrop-blur-sm"></div>
+                </div>
+
+                <div class="lg:col-span-7 space-y-6">
+                  <div class="flex items-center justify-between mb-4">
+                    <h2 class="text-2xl font-mystic text-amber-500 flex items-center gap-3">
+                      <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="animate-pulse text-purple-400"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/><path d="m9.1 4.5 3.9 3.9"/><path d="M12 2v5"/><path d="m4.5 9.1 3.9 3.9"/><path d="M2 12h5"/><path d="m4.5 14.9 3.9-3.9"/><path d="M14.9 4.5 11 8.4"/><path d="M12 19v-5"/></svg>
+                      Astral Projections
+                    </h2>
+                  </div>
+                  <div id="rune-circles" class="grid grid-cols-2 gap-4 md:gap-6"></div>
+                </div>
+              </div>
+
+              <section class="mt-16 pt-8 border-t border-slate-800">
+                <div class="flex items-center gap-3 mb-8">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-amber-500"><rect width="18" height="18" x="3" y="3" rx="2" ry="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/></svg>
+                    <h2 class="text-2xl font-mystic text-amber-500">Celestial Wallpaper Artificer</h2>
+                </div>
+                <div id="wallpaper-section" class="bg-slate-900/40 magical-border rounded-2xl p-6 backdrop-blur-md"></div>
+              </section>
+
+              <footer class="fixed bottom-0 left-0 right-0 bg-slate-950/90 backdrop-blur-md border-t border-amber-900/30 py-3 text-center text-xs text-slate-500 z-50">
+                <p class="font-mystic uppercase tracking-widest">Arcane Foundry © MMXXV — Mastering the Sacred Code</p>
+              </footer>
+            </div>
+        `;
+
+        // --- DOM ELEMENT REFERENCES ---
+        const textInput = document.getElementById('text-input');
+        const lineNumbersEl = document.getElementById('line-numbers');
+        const checkDuplicates = document.getElementById('check-duplicates');
+        const checkVowels = document.getElementById('check-vowels');
+        const checkDuplicatesBox = document.getElementById('check-duplicates-box');
+        const checkVowelsBox = document.getElementById('check-vowels-box');
+        const processedResultsContainer = document.getElementById('processed-results');
+        const alphabetTableContainer = document.getElementById('alphabet-table');
+        const runeCirclesContainer = document.getElementById('rune-circles');
+        const wallpaperSectionContainer = document.getElementById('wallpaper-section');
+
+        // --- RENDER FUNCTIONS ---
+        const renderCheckbox = (box, isChecked) => {
+          box.className = `w-5 h-5 rounded border border-amber-500/50 flex items-center justify-center transition ${isChecked ? 'bg-amber-500' : 'bg-transparent'}`;
+          box.innerHTML = isChecked ? `<div class="w-2 h-2 bg-slate-900 rounded-sm"></div>` : '';
+        };
+
+        const processAndRender = () => {
+          // Process text
+          const rawLines = state.inputText.split('\n');
+          state.lines = rawLines
+            .filter(line => line.trim() !== "")
+            .map(line => {
+              let cleaned = line.toUpperCase().replace(/[^A-Z]/g, '');
+              if (state.config.removeVowels) cleaned = cleaned.replace(/[AEIOU]/g, '');
+              if (state.config.removeDuplicates) {
+                const seen = new Set();
+                cleaned = cleaned.split('').filter(char => !seen.has(char) && seen.add(char)).join('');
+              }
+              const numbers = cleaned.split('').map(getNumberForLetter).filter(n => n !== null);
+              return { original: line, processed: cleaned, numbers };
+            });
+
+          // Adjust textarea height and line numbers
+          textInput.style.height = 'auto';
+          textInput.style.height = `${textInput.scrollHeight}px`;
+          const lineCount = state.inputText.split('\n').length || 1;
+          lineNumbersEl.innerHTML = Array.from({ length: Math.max(lineCount, 1) }).map((_, i) => 
+            `<div class="h-6 flex items-center justify-center w-full">${i + 1}</div>`
+          ).join('');
+
+          // Render updates
+          renderProcessedLines();
+          renderRuneCircles();
+          renderWallpaperSection();
+        };
+
+        const renderProcessedLines = () => {
+          let content;
+          if (state.lines.length === 0 || state.lines.every(l => !l.original.trim())) {
+            content = `<p class="text-slate-600 italic text-sm">Waiting for the scribe...</p>`;
+          } else {
+            content = state.lines.map((line, idx) => `
+              <div class="flex flex-col border-b border-slate-800 pb-2 mb-2 last:border-0">
+                <div class="text-[10px] text-slate-500 font-mono uppercase">Line ${idx + 1} Original: ${line.original}</div>
+                <div class="text-lg font-mystic text-purple-400 tracking-widest">${line.processed || 'VOID'}</div>
+              </div>
+            `).join('');
+          }
+          processedResultsContainer.innerHTML = `<div class="text-amber-500 font-mystic text-sm mb-2 opacity-70">Deciphered Inscription</div>${content}`;
+        };
+        
+        const renderRuneCircles = () => {
+            if (state.lines.length === 0) {
+                 runeCirclesContainer.innerHTML = `<div class="col-span-2 flex flex-col items-center justify-center h-64 text-slate-600 space-y-4">
+              <p class="font-mystic italic">The void awaits your ritual...</p>
+            </div>`;
+                return;
+            }
+            runeCirclesContainer.innerHTML = state.lines.map((line, i) => renderRuneCircle(line.numbers, i)).join('');
+        };
+
+        const renderRuneCircle = (numbers, index) => {
+          const size = 200, center = size / 2, radius = 65, pointRadius = 80;
+          const getPointCoords = (num, r) => {
+            const angle = (num - 1) * 40 - 90;
+            const rad = (angle * Math.PI) / 180;
+            return { x: center + r * Math.cos(rad), y: center + r * Math.sin(rad) };
+          };
+          
+          const points = [1, 2, 3, 4, 5, 6, 7, 8, 9].map(n => ({
+            num: n, coord: getPointCoords(n, radius), labelCoord: getPointCoords(n, pointRadius)
+          }));
+          
+          const pathData = numbers.length > 0 ? numbers.reduce((acc, num, i) => {
+            const { x, y } = getPointCoords(num, radius);
+            return i === 0 ? `M ${x} ${y}` : `${acc} L ${x} ${y}`;
+          }, "") : "";
+
+          return `
+            <div class="flex flex-col items-center bg-slate-900/40 p-3 md:p-6 rounded-xl magical-border relative overflow-hidden group">
+              <div class="absolute inset-0 opacity-5 pointer-events-none bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-amber-500 via-transparent to-transparent"></div>
+              <h4 class="text-amber-200/70 font-mystic mb-2 md:mb-4 uppercase tracking-widest text-[10px] md:text-sm">Sigil #${index + 1}</h4>
+              <svg width="100%" height="100%" viewBox="0 0 ${size} ${size}" class="drop-shadow-2xl max-w-[180px]">
+                <circle cx="${center}" cy="${center}" r="${radius}" fill="none" stroke="rgba(234, 179, 8, 0.2)" stroke-width="1" />
+                ${pathData ? `
+                  <path d="${pathData}" fill="none" stroke="rgba(168, 85, 247, 0.8)" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round" class="animate-pulse" />
+                  <path d="${pathData}" fill="none" stroke="rgba(168, 85, 247, 0.4)" stroke-width="5" stroke-linejoin="round" stroke-linecap="round" class="blur-[2px]" />
+                ` : ''}
+                ${points.map(p => `
+                  <g>
+                    <circle cx="${p.coord.x}" cy="${p.coord.y}" r="2" fill="${numbers.includes(p.num) ? '#a855f7' : '#475569'}" />
+                    <text x="${p.labelCoord.x}" y="${p.labelCoord.y}" text-anchor="middle" dominant-baseline="middle" fill="#fbbf24" font-size="14" font-weight="bold" class="font-mystic">${p.num}</text>
+                  </g>
+                `).join('')}
+              </svg>
+              <div class="mt-2 text-[8px] md:text-[10px] font-mono text-slate-500 text-center whitespace-normal break-words w-full">
+                ${numbers.length > 0 ? `Sequence: ${numbers.join(' → ')}` : "VOID"}
+              </div>
+            </div>
+          `;
+        };
+
+        const renderAlphabetTable = () => {
+          alphabetTableContainer.innerHTML = `
+            <h3 class="text-amber-400 font-mystic text-lg mb-4 text-center">Celestial Cipher Table</h3>
+            <table class="w-full border-collapse">
+              <thead>
+                <tr>${Object.keys(ALPHABET_MAP).map(num => `<th class="border border-slate-700 p-2 text-amber-500 font-mystic text-xl">${num}</th>`).join('')}</tr>
+              </thead>
+              <tbody>
+                ${[0, 1, 2].map(rowIndex => `
+                  <tr>
+                    ${Object.keys(ALPHABET_MAP).map(num => {
+                      const letters = ALPHABET_MAP[parseInt(num)];
+                      return `<td class="border border-slate-800 p-2 text-center text-slate-300 font-mono">${letters[rowIndex] || '-'}</td>`;
+                    }).join('')}
+                  </tr>
+                `).join('')}
+              </tbody>
+            </table>
+          `;
+        };
+        
+        const renderWallpaperSection = () => {
+            const visibleLines = state.lines.filter(l => l.numbers.length > 0);
+            
+            // Re-initialize element positions if line count changes
+            if (state.wallpaper.elements.filter(e => e.type === 'rune').length !== visibleLines.length) {
+                const isSingle = visibleLines.length === 1;
+                const newElements = [];
+                visibleLines.forEach((_, idx) => {
+                    if (isSingle) {
+                        newElements.push({ id: idx, type: 'rune', x: 50, y: 40 });
+                    } else {
+                        const col = idx % 2;
+                        const row = Math.floor(idx / 2);
+                        newElements.push({ id: idx, type: 'rune', x: col === 0 ? 30 : 70, y: 20 + row * 15 });
+                    }
+                    newElements.push({ id: idx, type: 'text', x: 50, y: 75 + (idx * 4) });
+                });
+                state.wallpaper.elements = newElements;
+            }
+
+            wallpaperSectionContainer.innerHTML = `
+              <div class="flex flex-col md:flex-row items-center justify-between gap-6 mb-8">
+                <div class="flex flex-wrap gap-2 p-1 bg-slate-950 rounded-lg border border-slate-800">
+                  <button id="wp-mode-static" class="flex items-center gap-2 px-4 py-2 rounded-md transition ${state.wallpaper.mode === 'static' ? 'bg-amber-600 text-white' : 'text-slate-500 hover:text-slate-300'}"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.7 7.7a2.5 2.5 0 0 1 1.8 4.3H2"/><path d="M9.6 4.6A2 2 0 0 1 11 8H2"/><path d="M12.6 19.4A2 2 0 0 1 14 16h-2"/><path d="M6.3 7.7a2.5 2.5 0 0 1-1.8 4.3H12"/><path d="M14.4 19.4A2 2 0 0 1 13 16h9"/><path d="M11.4 4.6A2 2 0 0 1 10 8h9"/></svg><span class="font-mystic text-sm">Static</span></button>
+                  <button id="wp-mode-dynamic" class="flex items-center gap-2 px-4 py-2 rounded-md transition ${state.wallpaper.mode === 'dynamic' ? 'bg-purple-600 text-white' : 'text-slate-500 hover:text-slate-300'}"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg><span class="font-mystic text-sm">Astral</span></button>
+                </div>
+                 <div class="flex items-center gap-4 text-[10px] font-mystic text-slate-500 uppercase tracking-widest bg-slate-950/50 px-4 py-2 rounded-lg border border-slate-800">
+                   <div class="flex items-center gap-1"><svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-amber-500"><path d="M22 14a8 8 0 0 1-8 8"/><path d="M18 11v-1a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v0a2 2 0 0 0-2 2v0a2 2 0 0 0-2 2v1"/><path d="m22 2-7 7"/></svg> Movable Elements</div>
+                   <div class="flex items-center gap-1 ml-2"><svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-purple-500"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M7 3v18"/><path d="M17 3v18"/><path d="M3 7h18"/><path d="M3 17h18"/></svg> Magnetic Snap</div>
+                </div>
+                <button id="wp-download" ${visibleLines.length === 0 ? 'disabled' : ''} class="w-full md:w-auto flex items-center justify-center gap-3 px-8 py-3 bg-gradient-to-r from-amber-600 to-amber-500 hover:from-amber-500 hover:to-amber-400 text-white font-mystic rounded-xl shadow-lg shadow-amber-900/40 transition-all active:scale-95 disabled:opacity-30"><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg> Forge Sacred Wallpaper</button>
+              </div>
+              <div id="wp-preview" class="relative mx-auto aspect-[9/16] max-w-[420px] w-full rounded-3xl border-4 border-slate-900 overflow-hidden shadow-2xl group select-none" style="background: ${state.wallpaper.mode === 'dynamic' ? 'radial-gradient(circle at center, #1e1b4b 0%, #020617 100%)' : 'radial-gradient(circle at center, #0f172a 0%, #020617 100%)'}">
+                 ${renderWallpaperPreviewContent()}
+              </div>
+              <canvas id="wp-canvas" class="hidden"></canvas>
+              <div class="mt-6 flex flex-col items-center gap-2">
+                <p class="text-[10px] text-slate-600 uppercase tracking-widest font-mystic">Preview is synchronized with final forge output.</p>
+                <p class="text-[10px] text-amber-500/50 uppercase tracking-widest font-mystic">* Solitary sigils are now focused to a smaller, more potent form *</p>
+              </div>
+            `;
+            attachWallpaperEventListeners();
+        };
+
+        const renderWallpaperPreviewContent = () => {
+            const visibleLines = state.lines.filter(l => l.numbers.length > 0);
+            const isSingle = visibleLines.length === 1;
+            const SNAP_X = [30, 50, 70];
+            const SNAP_Y = [10, 20, 30, 40, 50, 60, 70, 80, 90];
+            
+            return `
+              <div class="absolute inset-0 opacity-10 pointer-events-none">
+                ${SNAP_X.map(x => `<div class="absolute h-full w-px bg-amber-500" style="left: ${x}%"></div>`).join('')}
+                ${SNAP_Y.map(y => `<div class="absolute w-full h-px bg-purple-500" style="top: ${y}%"></div>`).join('')}
+              </div>
+              <div class="absolute top-8 w-full text-center"><h3 class="text-amber-500 font-mystic text-lg opacity-40">ARCANE VISION</h3></div>
+              ${visibleLines.length === 0 ? `<div class="absolute inset-0 flex items-center justify-center text-slate-700 italic font-mystic p-12 text-center">The scribe awaits your input...</div>` :
+                state.wallpaper.elements.map(el => {
+                  const line = visibleLines[el.id];
+                  if (!line) return '';
+                  const isDragging = state.wallpaper.draggingId?.id === el.id && state.wallpaper.draggingId?.type === el.type;
+                  const pathData = line.numbers.reduce((acc, num, i) => {
+                      const angle = (num - 1) * 40 - 90;
+                      const rad = (angle * Math.PI) / 180;
+                      const x = 50 + 40 * Math.cos(rad);
+                      const y = 50 + 40 * Math.sin(rad);
+                      return i === 0 ? `M ${x} ${y}` : `${acc} L ${x} ${y}`;
+                  }, "");
+                  
+                  return `
+                    <div data-id="${el.id}" data-type="${el.type}" style="left: ${el.x}%; top: ${el.y}%; transform: translate(-50%, -50%); cursor: grab;" class="absolute group/item transition-shadow ${isDragging ? 'z-50 scale-110' : 'z-10'}">
+                        ${el.type === 'rune' ? `
+                          <div class="p-2 rounded-lg">
+                            <svg width="${isSingle ? 165 : 90}" height="${isSingle ? 165 : 90}" viewBox="0 0 100 100">
+                              <path d="${pathData}" fill="none" stroke="${state.wallpaper.mode === 'dynamic' ? '#a855f7' : '#fbbf24'}" stroke-width="${isSingle ? '3.4' : '3.5'}" class="${state.wallpaper.mode === 'dynamic' ? 'drop-shadow-[0_0_8px_#a855f7]' : ''}" />
+                            </svg>
+                          </div>
+                        ` : `
+                          <div class="px-3 py-1 rounded-full whitespace-nowrap overflow-visible ${isDragging ? 'bg-slate-400/10' : ''}">
+                            <div class="text-center font-ancient" style="font-size: ${isSingle ? '30px' : '18px'}; color: rgba(71, 85, 105, 0.4); text-shadow: 0 2px 4px rgba(0,0,0,0.5)">
+                              ${line.original}
+                            </div>
+                          </div>
+                        `}
+                    </div>
+                  `;
+                }).join('')
+              }
+            `;
+        };
+        
+        // --- EVENT LISTENERS & HANDLERS ---
+        const attachWallpaperEventListeners = () => {
+            document.getElementById('wp-mode-static').onclick = () => { state.wallpaper.mode = 'static'; renderWallpaperSection(); };
+            document.getElementById('wp-mode-dynamic').onclick = () => { state.wallpaper.mode = 'dynamic'; renderWallpaperSection(); };
+            document.getElementById('wp-download').onclick = generateAndDownloadWallpaper;
+            
+            const preview = document.getElementById('wp-preview');
+            preview.onmousedown = (e) => {
+                const target = e.target.closest('[data-id]');
+                if (target) {
+                    e.preventDefault();
+                    state.wallpaper.draggingId = { id: parseInt(target.dataset.id), type: target.dataset.type };
+                    target.style.cursor = 'grabbing';
+                }
+            };
+            const handleMouseMove = (e) => {
+                if (!state.wallpaper.draggingId) return;
+                const rect = preview.getBoundingClientRect();
+                let rawX = ((e.clientX - rect.left) / rect.width) * 100;
+                let rawY = ((e.clientY - rect.top) / rect.height) * 100;
+                let x = rawX, y = rawY;
+
+                const SNAP_X = [30, 50, 70], SNAP_Y = [10, 20, 30, 40, 50, 60, 70, 80, 90], SNAP_THRESHOLD = 3;
+                SNAP_X.forEach(target => { if (Math.abs(rawX - target) < SNAP_THRESHOLD) x = target; });
+                SNAP_Y.forEach(target => { if (Math.abs(rawY - target) < SNAP_THRESHOLD) y = target; });
+
+                state.wallpaper.elements = state.wallpaper.elements.map(p => 
+                    (p.id === state.wallpaper.draggingId.id && p.type === state.wallpaper.draggingId.type) 
+                    ? { ...p, x: Math.max(0, Math.min(100, x)), y: Math.max(0, Math.min(100, y)) } : p
+                );
+                preview.innerHTML = renderWallpaperPreviewContent();
+            };
+            const handleMouseUp = () => {
+                if (state.wallpaper.draggingId) {
+                    const el = preview.querySelector(`[data-id="${state.wallpaper.draggingId.id}"][data-type="${state.wallpaper.draggingId.type}"]`);
+                    if (el) el.style.cursor = 'grab';
+                    state.wallpaper.draggingId = null;
+                }
+            };
+            preview.onmousemove = handleMouseMove;
+            preview.onmouseup = handleMouseUp;
+            preview.onmouseleave = handleMouseUp;
+        };
+
+        const generateAndDownloadWallpaper = () => {
+            const canvas = document.getElementById('wp-canvas');
+            const ctx = canvas.getContext('2d');
+            const width = 1080, height = 1920;
+            canvas.width = width; canvas.height = height;
+
+            const gradient = ctx.createRadialGradient(width/2, height/2, 0, width/2, height/2, height);
+            gradient.addColorStop(0, state.wallpaper.mode === 'dynamic' ? '#1e1b4b' : '#0f172a'); 
+            gradient.addColorStop(1, '#020617');
+            ctx.fillStyle = gradient;
+            ctx.fillRect(0, 0, width, height);
+
+            if (state.wallpaper.mode === 'dynamic') {
+                ctx.strokeStyle = 'rgba(234, 179, 8, 0.05)';
+                for (let i = 0; i < 60; i++) {
+                    ctx.beginPath();
+                    ctx.arc(Math.random() * width, Math.random() * height, Math.random() * 250, 0, Math.PI * 2);
+                    ctx.stroke();
+                }
+            }
+
+            ctx.font = 'bold 65px Cinzel, serif'; ctx.fillStyle = '#fbbf24'; ctx.textAlign = 'center';
+            ctx.fillText('SACRED RUNES', width / 2, 180);
+            ctx.font = 'italic 28px Quicksand, sans-serif'; ctx.fillStyle = '#94a3b8';
+            ctx.fillText('MANIFESTED FROM THE ETHER', width / 2, 235);
+            
+            const visibleLines = state.lines.filter(l => l.numbers.length > 0);
+            const isSingle = visibleLines.length === 1;
+
+            state.wallpaper.elements.forEach(pos => {
+                const line = visibleLines[pos.id];
+                if (!line) return;
+                const centerX = (pos.x / 100) * width;
+                const centerY = (pos.y / 100) * height;
+
+                if (pos.type === 'rune') {
+                    const radius = isSingle ? width * 0.2625 : 130;
+                    if (line.numbers.length > 0) {
+                        ctx.beginPath();
+                        line.numbers.forEach((num, i) => {
+                            const angle = (num - 1) * 40 - 90, rad = (angle * Math.PI) / 180;
+                            const x = centerX + radius * Math.cos(rad), y = centerY + radius * Math.sin(rad);
+                            if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+                        });
+
+                        ctx.shadowColor = '#a855f7';
+                        ctx.shadowBlur = state.wallpaper.mode === 'dynamic' ? (isSingle ? 35 : 20) : 0;
+                        ctx.strokeStyle = state.wallpaper.mode === 'dynamic' ? '#a855f7' : '#fbbf24';
+                        ctx.lineWidth = isSingle ? (state.wallpaper.mode === 'dynamic' ? 9 : 7.5) : (state.wallpaper.mode === 'dynamic' ? 7 : 5);
+                        ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+                        ctx.stroke();
+                        ctx.shadowBlur = 0;
+                    }
+                } else { // text
+                    ctx.font = isSingle ? '80px Uncial Antiqua, serif' : '48px Uncial Antiqua, serif';
+                    ctx.fillStyle = 'rgba(71, 85, 105, 0.4)';
+                    ctx.textAlign = 'center';
+                    ctx.fillText(line.original, centerX, centerY);
+                }
+            });
+
+            const link = document.createElement('a');
+            link.download = `arcane-rune-wallpaper-${Date.now()}.png`;
+            link.href = canvas.toDataURL('image/png');
+            link.click();
+        };
+
+        // --- INITIALIZATION ---
+        textInput.addEventListener('input', (e) => {
+            state.inputText = e.target.value;
+            processAndRender();
+        });
+        checkDuplicates.addEventListener('change', (e) => {
+            state.config.removeDuplicates = e.target.checked;
+            renderCheckbox(checkDuplicatesBox, e.target.checked);
+            processAndRender();
+        });
+        checkVowels.addEventListener('change', (e) => {
+            state.config.removeVowels = e.target.checked;
+            renderCheckbox(checkVowelsBox, e.target.checked);
+            processAndRender();
+        });
+
+        // Initial Render
+        renderCheckbox(checkDuplicatesBox, state.config.removeDuplicates);
+        renderCheckbox(checkVowelsBox, state.config.removeVowels);
+        renderAlphabetTable();
+        processAndRender();
+      });
+    </script>
+<script type="module" src="/index.tsx"></script>
+</body>
 </html>
